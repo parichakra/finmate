@@ -33,6 +33,28 @@ class UserProfile {
     };
   }
 
+  UserProfile copyWith({
+    int? id,
+    String? name,
+    String? currencyCode,
+    String? currencySymbol,
+    String? avatarPath,
+    bool? isPinEnabled,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return UserProfile(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      currencyCode: currencyCode ?? this.currencyCode,
+      currencySymbol: currencySymbol ?? this.currencySymbol,
+      avatarPath: avatarPath ?? this.avatarPath,
+      isPinEnabled: isPinEnabled ?? this.isPinEnabled,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
   factory UserProfile.fromMap(Map<String, dynamic> map) {
     return UserProfile(
       id: map['id'] as int?,

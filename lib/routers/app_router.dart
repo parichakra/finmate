@@ -7,6 +7,8 @@ import '../features/transactions/presentation/transactions_screen.dart';
 import '../features/budgets/presentation/budgets_screen.dart';
 import '../features/categories/presentation/categories_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
+import '../features/profile/presentation/edit_profile_screen.dart';
+import '../models/user_profile.dart';
 import '../features/transactions/presentation/add_transaction_screen.dart';
 import '../features/groups/presentation/groups_screen.dart';
 import '../features/groups/presentation/create_group_screen.dart';
@@ -147,6 +149,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final transaction = state.extra as Transaction;
           return AddTransactionScreen(transaction: transaction);
+        },
+      ),
+      GoRoute(
+        path: '/profile/edit',
+        name: 'edit-profile',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) {
+          final profile = state.extra as UserProfile;
+          return EditProfileScreen(profile: profile);
         },
       ),
     ],
