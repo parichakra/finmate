@@ -44,6 +44,12 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+
+# Flutter app icons
+android/app/src/main/res/mipmap-*/
+ios/Runner/Assets.xcassets/AppIcon.appiconset/
+
+
 # Widget Preview related
 .widget_preview/
 
