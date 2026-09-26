@@ -8,6 +8,12 @@ import '../features/budgets/presentation/budgets_screen.dart';
 import '../features/categories/presentation/categories_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
 import '../features/transactions/presentation/add_transaction_screen.dart';
+import '../features/groups/presentation/groups_screen.dart';
+import '../features/groups/presentation/create_group_screen.dart';
+import '../features/groups/presentation/group_detail_screen.dart';
+import '../features/groups/presentation/add_shared_expense_screen.dart';
+import '../features/groups/presentation/settle_up_screen.dart';
+import '../features/budgets/presentation/create_budget_screen.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 final _shellNavigatorKey = GlobalKey<NavigatorState>();
@@ -28,37 +34,38 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/dashboard',
             name: 'dashboard',
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: DashboardScreen(),
-            ),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: DashboardScreen()),
           ),
           GoRoute(
             path: '/transactions',
             name: 'transactions',
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: TransactionsScreen(),
-            ),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: TransactionsScreen()),
           ),
           GoRoute(
             path: '/budgets',
             name: 'budgets',
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: BudgetsScreen(),
-            ),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: BudgetsScreen()),
           ),
           GoRoute(
             path: '/categories',
             name: 'categories',
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: CategoriesScreen(),
-            ),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: CategoriesScreen()),
+          ),
+          GoRoute(
+            path: '/groups',
+            name: 'groups',
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: GroupsScreen()),
           ),
           GoRoute(
             path: '/profile',
             name: 'profile',
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: ProfileScreen(),
-            ),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: ProfileScreen()),
           ),
         ],
       ),
@@ -73,6 +80,45 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return AddTransactionScreen(initialType: type);
         },
       ),
+      GoRoute(
+        path: '/groups/create',
+        name: 'create-group',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const CreateGroupScreen(),
+      ),
+      GoRoute(
+        path: '/groups/:id',
+        name: 'group-detail',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) {
+          final id = int.parse(state.pathParameters['id']!);
+          return GroupDetailScreen(groupId: id);
+        },
+      ),
+      GoRoute(
+        path: '/groups/:id/add-expense',
+        name: 'add-shared-expense',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) {
+          final id = int.parse(state.pathParameters['id']!);
+          return AddSharedExpenseScreen(groupId: id);
+        },
+      ),
+      GoRoute(
+        path: '/groups/:id/settle',
+        name: 'settle-up',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) {
+          final id = int.parse(state.pathParameters['id']!);
+          return SettleUpScreen(groupId: id);
+        },
+      ),
+      GoRoute(
+        path: '/budgets/create',
+        name: 'create-budget',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const CreateBudgetScreen(),
+      ),
     ],
   );
 });
@@ -85,10 +131,7 @@ class MainShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: child,
-      bottomNavigationBar: const AppBottomNav(),
-    );
+    return Scaffold(body: child, bottomNavigationBar: const AppBottomNav());
   }
 }
 
@@ -101,7 +144,7 @@ class AppBottomNav extends ConsumerWidget {
     if (location.startsWith('/dashboard')) return 0;
     if (location.startsWith('/transactions')) return 1;
     if (location.startsWith('/budgets')) return 2;
-    if (location.startsWith('/categories')) return 3;
+    if (location.startsWith('/groups')) return 3;
     if (location.startsWith('/profile')) return 4;
     return 0;
   }
@@ -118,7 +161,7 @@ class AppBottomNav extends ConsumerWidget {
         context.goNamed('budgets');
         break;
       case 3:
-        context.goNamed('categories');
+        context.goNamed('groups');
         break;
       case 4:
         context.goNamed('profile');
@@ -150,9 +193,9 @@ class AppBottomNav extends ConsumerWidget {
           label: 'Budgets',
         ),
         NavigationDestination(
-          icon: Icon(Icons.category_outlined),
-          selectedIcon: Icon(Icons.category),
-          label: 'Categories',
+          icon: Icon(Icons.group_outlined),
+          selectedIcon: Icon(Icons.group),
+          label: 'Groups',
         ),
         NavigationDestination(
           icon: Icon(Icons.person_outline),
