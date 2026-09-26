@@ -5,7 +5,6 @@ import '../../../models/shared_expense.dart';
 import '../../../models/expense_share.dart';
 import '../../../models/settlement.dart';
 import '../../../models/transaction.dart';
-import '../../../models/category.dart';
 
 class GroupRepository {
   final DatabaseHelper _db;
@@ -43,6 +42,17 @@ class GroupRepository {
 
   Future<Group?> getGroup(int id) async {
     return await _db.getGroupById(id);
+  }
+
+  Future<int> updateGroup({
+    required int id,
+    required String name,
+    String? description,
+  }) async {
+    final existing = await _db.getGroupById(id);
+    if (existing == null) throw Exception('Group not found');
+    final updated = existing.copyWith(name: name, description: description);
+    return await _db.updateGroup(updated);
   }
 
   Future<int> deleteGroup(int id) async {
