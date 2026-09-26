@@ -14,6 +14,9 @@ import '../features/groups/presentation/group_detail_screen.dart';
 import '../features/groups/presentation/add_shared_expense_screen.dart';
 import '../features/groups/presentation/settle_up_screen.dart';
 import '../features/budgets/presentation/create_budget_screen.dart';
+import '../models/group.dart';
+import '../models/budget.dart';
+import '../models/transaction.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 final _shellNavigatorKey = GlobalKey<NavigatorState>();
@@ -114,10 +117,37 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
+        path: '/groups/:id/edit',
+        name: 'edit-group',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) {
+          final group = state.extra as Group;
+          return CreateGroupScreen(group: group);
+        },
+      ),
+      GoRoute(
         path: '/budgets/create',
         name: 'create-budget',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const CreateBudgetScreen(),
+      ),
+      GoRoute(
+        path: '/budgets/edit',
+        name: 'edit-budget',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) {
+          final budget = state.extra as Budget;
+          return CreateBudgetScreen(budget: budget);
+        },
+      ),
+      GoRoute(
+        path: '/transactions/edit',
+        name: 'edit-transaction',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) {
+          final transaction = state.extra as Transaction;
+          return AddTransactionScreen(transaction: transaction);
+        },
       ),
     ],
   );

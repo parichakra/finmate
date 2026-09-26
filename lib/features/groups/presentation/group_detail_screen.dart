@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../models/group.dart';
 import '../../../models/group_member.dart';
 import '../../../models/settlement.dart';
 import '../providers/group_providers.dart';
@@ -14,24 +15,124 @@ class GroupDetailScreen extends ConsumerWidget {
 
   const GroupDetailScreen({super.key, required this.groupId});
 
+  /// Resolves the current group from the cached provider list.
+  Group? _currentGroup(List<Group> groups) =>
+      groups.where((g) => g.id == groupId).firstOrNull;
+
+  Future<void> _editGroup(
+    BuildContext context,
+    WidgetRef ref,
+    Group group,
+  ) async {
+    await context.push('/groups/${group.id}/edit', extra: group);
+    // Refresh group name in AppBar after possible update
+    ref.invalidate(groupsProvider);
+  }
+
+  Future<void> _deleteGroup(
+    BuildContext context,
+    WidgetRef ref,
+    Group group,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Group?'),
+        content: Text(
+          'Delete "${group.name}"? This will permanently remove all expenses '
+          'and settlements in this group. This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      final repo = ref.read(groupRepositoryProvider);
+      await repo.deleteGroup(groupId);
+      ref.invalidate(groupsProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('"${group.name}" deleted')),
+        );
+        context.pop();
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final groupAsync = ref.watch(groupsProvider);
-    final membersAsync = ref.watch(groupMembersProvider(groupId));
+    ref.watch(groupMembersProvider(groupId)); // keeps member data warm
     final expensesAsync = ref.watch(sharedExpensesProvider(groupId));
-    final balancesAsync = ref.watch(groupBalancesProvider(groupId));
+    ref.watch(groupBalancesProvider(groupId)); // keeps balance data warm
     final settlementsAsync = ref.watch(groupSettlementsProvider(groupId));
 
     return Scaffold(
       appBar: AppBar(
         title: groupAsync.when(
           data: (groups) {
-            final group = groups.where((g) => g.id == groupId).firstOrNull;
+            final group = _currentGroup(groups);
             return Text(group?.name ?? 'Group');
           },
           loading: () => const Text('Group'),
           error: (_, __) => const Text('Group'),
         ),
+        actions: [
+          groupAsync.when(
+            data: (groups) {
+              final group = _currentGroup(groups);
+              if (group == null) return const SizedBox.shrink();
+              return PopupMenuButton<String>(
+                onSelected: (value) {
+                  if (value == 'edit') {
+                    _editGroup(context, ref, group);
+                  } else if (value == 'delete') {
+                    _deleteGroup(context, ref, group);
+                  }
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(
+                    value: 'edit',
+                    child: ListTile(
+                      leading: Icon(Icons.edit_outlined),
+                      title: Text('Edit Group'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: ListTile(
+                      leading: Icon(Icons.delete_outline, color: Colors.red),
+                      title: Text(
+                        'Delete Group',
+                        style: TextStyle(color: Colors.red),
+                      ),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                ],
+              );
+            },
+            loading: () => const SizedBox.shrink(),
+            error: (_, __) => const SizedBox.shrink(),
+          ),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: () async {

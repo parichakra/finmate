@@ -9,9 +9,19 @@ import '../../../models/category.dart';
 import '../providers/transaction_providers.dart';
 
 class AddTransactionScreen extends ConsumerStatefulWidget {
-  final String? initialType; // 'income' or 'expense'
+  /// Pass an existing transaction to enter edit mode. Null = create mode.
+  final Transaction? transaction;
 
-  const AddTransactionScreen({super.key, this.initialType});
+  /// Only used in create mode to pre-select the type toggle.
+  final String? initialType;
+
+  const AddTransactionScreen({
+    super.key,
+    this.transaction,
+    this.initialType,
+  });
+
+  bool get isEditing => transaction != null;
 
   @override
   ConsumerState<AddTransactionScreen> createState() =>
@@ -29,10 +39,24 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
   Category? _selectedCategory;
   bool _isLoading = false;
 
+  /// The category id to pre-select when the categories list loads.
+  /// Only relevant in edit mode.
+  int? _preselectedCategoryId;
+
   @override
   void initState() {
     super.initState();
-    _type = widget.initialType ?? 'expense';
+    if (widget.isEditing) {
+      final tx = widget.transaction!;
+      _type = tx.type;
+      _amountController.text = tx.amount.toString();
+      _descriptionController.text = tx.description ?? '';
+      _notesController.text = tx.notes ?? '';
+      _selectedDate = tx.date;
+      _preselectedCategoryId = tx.categoryId;
+    } else {
+      _type = widget.initialType ?? 'expense';
+    }
   }
 
   @override
@@ -46,41 +70,65 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
   Future<void> _saveTransaction() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedCategory == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Please select a category')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a category')),
+      );
       return;
     }
 
     setState(() => _isLoading = true);
 
     try {
-      final transaction = Transaction(
-        type: _type,
-        amount: double.parse(_amountController.text.trim()),
-        categoryId: _selectedCategory!.id!,
-        description: _descriptionController.text.trim().isEmpty
-            ? null
-            : _descriptionController.text.trim(),
-        notes: _notesController.text.trim().isEmpty
-            ? null
-            : _notesController.text.trim(),
-        date: _selectedDate,
-      );
-
       final repo = ref.read(transactionRepositoryProvider);
-      await repo.addTransaction(transaction);
 
-      // Refresh the transactions list
+      if (widget.isEditing) {
+        // ── UPDATE ──
+        final original = widget.transaction!;
+        final updated = Transaction(
+          id: original.id,
+          type: _type,
+          amount: double.parse(_amountController.text.trim()),
+          categoryId: _selectedCategory!.id!,
+          description: _descriptionController.text.trim().isEmpty
+              ? null
+              : _descriptionController.text.trim(),
+          notes: _notesController.text.trim().isEmpty
+              ? null
+              : _notesController.text.trim(),
+          date: _selectedDate,
+          isDeleted: original.isDeleted,
+          createdAt: original.createdAt,
+          updatedAt: DateTime.now(),
+        );
+        await repo.updateTransaction(updated);
+      } else {
+        // ── CREATE ──
+        final transaction = Transaction(
+          type: _type,
+          amount: double.parse(_amountController.text.trim()),
+          categoryId: _selectedCategory!.id!,
+          description: _descriptionController.text.trim().isEmpty
+              ? null
+              : _descriptionController.text.trim(),
+          notes: _notesController.text.trim().isEmpty
+              ? null
+              : _notesController.text.trim(),
+          date: _selectedDate,
+        );
+        await repo.addTransaction(transaction);
+      }
+
       ref.invalidate(transactionsProvider);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              _type == 'income'
-                  ? 'Income added successfully'
-                  : 'Expense added successfully',
+              widget.isEditing
+                  ? 'Transaction updated'
+                  : (_type == 'income'
+                      ? 'Income added successfully'
+                      : 'Expense added successfully'),
             ),
             backgroundColor: _type == 'income'
                 ? AppTheme.income
@@ -106,7 +154,11 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(isIncome ? 'Add Income' : 'Add Expense'),
+        title: Text(
+          widget.isEditing
+              ? 'Edit Transaction'
+              : (isIncome ? 'Add Income' : 'Add Expense'),
+        ),
         leading: IconButton(
           icon: const Icon(Icons.close),
           onPressed: () => context.pop(),
@@ -135,7 +187,10 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
               onSelectionChanged: (Set<String> newSelection) {
                 setState(() {
                   _type = newSelection.first;
-                  _selectedCategory = null; // reset category when type changes
+                  // Reset category when type changes so the dropdown
+                  // reloads with the correct list.
+                  _selectedCategory = null;
+                  _preselectedCategoryId = null;
                 });
               },
             ),
@@ -150,7 +205,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
               style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
               decoration: InputDecoration(
                 labelText: 'Amount',
-                prefixText: '\रु', // Use the default currency symbol
+                prefixText: 'रु ',
                 prefixStyle: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
@@ -173,6 +228,18 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
             // Category
             categoriesAsync.when(
               data: (categories) {
+                // Pre-select the category when the list first loads in edit mode.
+                if (_selectedCategory == null &&
+                    _preselectedCategoryId != null) {
+                  final match = categories
+                      .where((c) => c.id == _preselectedCategoryId)
+                      .firstOrNull;
+                  if (match != null) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted) setState(() => _selectedCategory = match);
+                    });
+                  }
+                }
                 return DropdownButtonFormField<Category>(
                   value: _selectedCategory,
                   decoration: const InputDecoration(
@@ -258,9 +325,11 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                           color: Colors.white,
                         ),
                       )
-                    : const Text(
-                        'Save Transaction',
-                        style: TextStyle(fontSize: 16),
+                    : Text(
+                        widget.isEditing
+                            ? 'Save Changes'
+                            : 'Save Transaction',
+                        style: const TextStyle(fontSize: 16),
                       ),
               ),
             ),

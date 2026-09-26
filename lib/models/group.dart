@@ -7,6 +7,15 @@ class Group {
   Group({this.id, required this.name, this.description, DateTime? createdAt})
     : createdAt = createdAt ?? DateTime.now();
 
+  Group copyWith({int? id, String? name, String? description}) {
+    return Group(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      description: description ?? this.description,
+      createdAt: createdAt,
+    );
+  }
+
   Map<String, dynamic> toMap() {
     return {
       'id': id,

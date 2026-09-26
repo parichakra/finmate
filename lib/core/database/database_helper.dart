@@ -626,6 +626,16 @@ class DatabaseHelper {
     return Group.fromMap(result.first);
   }
 
+  Future<int> updateGroup(Group group) async {
+    final db = await database;
+    return await db.update(
+      'groups',
+      group.toMap(),
+      where: 'id = ?',
+      whereArgs: [group.id],
+    );
+  }
+
   Future<int> deleteGroup(int id) async {
     final db = await database;
     return await db.delete('groups', where: 'id = ?', whereArgs: [id]);

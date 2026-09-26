@@ -8,7 +8,12 @@ import '../../../models/category.dart';
 import '../providers/budget_providers.dart';
 
 class CreateBudgetScreen extends ConsumerStatefulWidget {
-  const CreateBudgetScreen({super.key});
+  /// Pass an existing budget to enter edit mode. Null = create mode.
+  final Budget? budget;
+
+  const CreateBudgetScreen({super.key, this.budget});
+
+  bool get isEditing => budget != null;
 
   @override
   ConsumerState<CreateBudgetScreen> createState() => _CreateBudgetScreenState();
@@ -19,8 +24,23 @@ class _CreateBudgetScreenState extends ConsumerState<CreateBudgetScreen> {
   final _nameController = TextEditingController();
   final _amountController = TextEditingController();
 
-  Category? _selectedCategory; // null = Overall budget
+  Category? _selectedCategory;
   bool _isLoading = false;
+
+  /// The category id to pre-select when the categories list loads.
+  /// Only relevant in edit mode.
+  int? _preselectedCategoryId;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.isEditing) {
+      final b = widget.budget!;
+      _nameController.text = b.name;
+      _amountController.text = b.amount.toString();
+      _preselectedCategoryId = b.categoryId;
+    }
+  }
 
   @override
   void dispose() {
@@ -35,25 +55,49 @@ class _CreateBudgetScreenState extends ConsumerState<CreateBudgetScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final now = DateTime.now();
-      final startOfMonth = DateTime(now.year, now.month, 1);
-
-      final budget = Budget(
-        name: _nameController.text.trim(),
-        amount: double.parse(_amountController.text.trim()),
-        period: 'monthly',
-        startDate: startOfMonth,
-        categoryId: _selectedCategory?.id,
-      );
-
       final repo = ref.read(budgetRepositoryProvider);
-      await repo.createBudget(budget);
+
+      if (widget.isEditing) {
+        // ── UPDATE ──
+        final original = widget.budget!;
+        final updated = Budget(
+          id: original.id,
+          name: _nameController.text.trim(),
+          amount: double.parse(_amountController.text.trim()),
+          period: original.period,
+          startDate: original.startDate,
+          endDate: original.endDate,
+          categoryId: _selectedCategory?.id,
+          isActive: original.isActive,
+          createdAt: original.createdAt,
+          updatedAt: DateTime.now(),
+        );
+        await repo.updateBudget(updated);
+      } else {
+        // ── CREATE ──
+        final now = DateTime.now();
+        final startOfMonth = DateTime(now.year, now.month, 1);
+        final budget = Budget(
+          name: _nameController.text.trim(),
+          amount: double.parse(_amountController.text.trim()),
+          period: 'monthly',
+          startDate: startOfMonth,
+          categoryId: _selectedCategory?.id,
+        );
+        await repo.createBudget(budget);
+      }
 
       ref.invalidate(activeBudgetsProvider);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Budget created successfully')),
+          SnackBar(
+            content: Text(
+              widget.isEditing
+                  ? 'Budget updated successfully'
+                  : 'Budget created successfully',
+            ),
+          ),
         );
         context.pop();
       }
@@ -73,7 +117,7 @@ class _CreateBudgetScreenState extends ConsumerState<CreateBudgetScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Create Budget'),
+        title: Text(widget.isEditing ? 'Edit Budget' : 'Create Budget'),
         leading: IconButton(
           icon: const Icon(Icons.close),
           onPressed: () => context.pop(),
@@ -117,6 +161,18 @@ class _CreateBudgetScreenState extends ConsumerState<CreateBudgetScreen> {
             // Category (Overall or specific)
             categoriesAsync.when(
               data: (categories) {
+                // Pre-select category when list first loads in edit mode.
+                if (_selectedCategory == null &&
+                    _preselectedCategoryId != null) {
+                  final match = categories
+                      .where((c) => c.id == _preselectedCategoryId)
+                      .firstOrNull;
+                  if (match != null) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted) setState(() => _selectedCategory = match);
+                    });
+                  }
+                }
                 return DropdownButtonFormField<Category?>(
                   value: _selectedCategory,
                   decoration: const InputDecoration(
@@ -145,17 +201,18 @@ class _CreateBudgetScreenState extends ConsumerState<CreateBudgetScreen> {
             ),
             const SizedBox(height: 24),
 
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.blue.shade50,
-                borderRadius: BorderRadius.circular(8),
+            if (!widget.isEditing)
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  'This will create a monthly budget starting from the 1st of the current month.',
+                  style: TextStyle(color: Color(0xFF0A0A0A)),
+                ),
               ),
-              child: const Text(
-                'This will create a monthly budget starting from the 1st of the current month.',
-                style: TextStyle(color: Color(0xFF0A0A0A)),
-              ),
-            ),
             const SizedBox(height: 32),
 
             SizedBox(
@@ -175,9 +232,9 @@ class _CreateBudgetScreenState extends ConsumerState<CreateBudgetScreen> {
                           color: Colors.white,
                         ),
                       )
-                    : const Text(
-                        'Create Budget',
-                        style: TextStyle(
+                    : Text(
+                        widget.isEditing ? 'Save Changes' : 'Create Budget',
+                        style: const TextStyle(
                           fontSize: 13,
                           color: Color(0xFF0A0A0A),
                         ),

@@ -85,6 +85,62 @@ class _TransactionTile extends ConsumerWidget {
 
   const _TransactionTile({required this.transaction});
 
+  Future<void> _showOptions(BuildContext context, WidgetRef ref) async {
+    await showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text('Edit'),
+              onTap: () {
+                Navigator.pop(ctx);
+                context.pushNamed(
+                  'edit-transaction',
+                  extra: transaction,
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline, color: Colors.red),
+              title: const Text('Delete', style: TextStyle(color: Colors.red)),
+              onTap: () async {
+                Navigator.pop(ctx);
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (dCtx) => AlertDialog(
+                    title: const Text('Delete Transaction?'),
+                    content: const Text('This action cannot be undone.'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(dCtx, false),
+                        child: const Text('Cancel'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(dCtx, true),
+                        child: const Text(
+                          'Delete',
+                          style: TextStyle(color: Colors.red),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirm == true && context.mounted) {
+                  final repo = ref.read(transactionRepositoryProvider);
+                  await repo.deleteTransaction(transaction.id!);
+                  ref.invalidate(transactionsProvider);
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isIncome = transaction.type == 'income';
@@ -119,35 +175,8 @@ class _TransactionTile extends ConsumerWidget {
             color: color,
           ),
         ),
-        onLongPress: () async {
-          // Simple delete confirmation
-          final confirm = await showDialog<bool>(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: const Text('Delete Transaction?'),
-              content: const Text('This action cannot be undone.'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Cancel'),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  child: const Text(
-                    'Delete',
-                    style: TextStyle(color: Colors.red),
-                  ),
-                ),
-              ],
-            ),
-          );
-
-          if (confirm == true) {
-            final repo = ref.read(transactionRepositoryProvider);
-            await repo.deleteTransaction(transaction.id!);
-            ref.invalidate(transactionsProvider);
-          }
-        },
+        onTap: () => _showOptions(context, ref),
+        onLongPress: () => _showOptions(context, ref),
       ),
     );
   }
