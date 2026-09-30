@@ -4,6 +4,9 @@ import '../../../core/database/database_provider.dart';
 import '../../../models/user_profile.dart';
 import '../data/profile_repository.dart';
 
+// Re-export so all security screens only need one import.
+export '../../security/providers/app_lock_provider.dart';
+
 final profileRepositoryProvider = Provider<ProfileRepository>((ref) {
   return ProfileRepository(ref.watch(databaseProvider));
 });

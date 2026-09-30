@@ -30,13 +30,22 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 2, // ← increased version
+      version: 3,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
   }
 
   Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 3) {
+      // Add PIN and bypass-key columns to user_profile
+      await db.execute(
+        'ALTER TABLE user_profile ADD COLUMN pin_hash TEXT',
+      );
+      await db.execute(
+        'ALTER TABLE user_profile ADD COLUMN bypass_key TEXT',
+      );
+    }
     if (oldVersion < 2) {
       // Create new Splitwise tables
       await db.execute('''
@@ -162,6 +171,8 @@ class DatabaseHelper {
         currency_symbol TEXT NOT NULL DEFAULT 'रु',
         avatar_path TEXT,
         is_pin_enabled INTEGER NOT NULL DEFAULT 0,
+        pin_hash TEXT,
+        bypass_key TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       )
@@ -518,6 +529,53 @@ class DatabaseHelper {
       profile.toMap(),
       where: 'id = ?',
       whereArgs: [profile.id],
+    );
+  }
+
+  // ==================== PIN METHODS ====================
+
+  /// Marks that a PIN has been configured (actual PIN lives in
+  /// FlutterSecureStorage; this column is a presence flag only).
+  Future<void> savePin(int profileId) async {
+    final db = await database;
+    await db.update(
+      'user_profile',
+      {
+        'pin_hash': 'set', // non-empty flag — actual value is in secure storage
+        'is_pin_enabled': 1,
+        'updated_at': DateTime.now().toIso8601String(),
+      },
+      where: 'id = ?',
+      whereArgs: [profileId],
+    );
+  }
+
+  Future<void> removePin(int profileId) async {
+    final db = await database;
+    await db.update(
+      'user_profile',
+      {
+        'pin_hash': null,
+        'is_pin_enabled': 0,
+        'updated_at': DateTime.now().toIso8601String(),
+      },
+      where: 'id = ?',
+      whereArgs: [profileId],
+    );
+  }
+
+  /// Marks that a bypass key has been configured (actual secret lives in
+  /// FlutterSecureStorage; this column is a presence flag only).
+  Future<void> saveBypassKey(int profileId) async {
+    final db = await database;
+    await db.update(
+      'user_profile',
+      {
+        'bypass_key': 'set', // non-empty flag — actual value is in secure storage
+        'updated_at': DateTime.now().toIso8601String(),
+      },
+      where: 'id = ?',
+      whereArgs: [profileId],
     );
   }
 

@@ -31,11 +31,8 @@ class ProfileScreen extends ConsumerWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Body — separated so it rebuilds only when profile data changes
-// ─────────────────────────────────────────────────────────────────────────────
 class _ProfileBody extends ConsumerWidget {
   final UserProfile profile;
-
   const _ProfileBody({required this.profile});
 
   @override
@@ -57,7 +54,7 @@ class _ProfileBody extends ConsumerWidget {
                   profile.name.isNotEmpty
                       ? profile.name[0].toUpperCase()
                       : 'U',
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 44,
                     fontWeight: FontWeight.bold,
                     color: AppTheme.primary,
@@ -69,14 +66,10 @@ class _ProfileBody extends ConsumerWidget {
                   await context.push('/profile/edit', extra: profile);
                   ref.invalidate(profileProvider);
                 },
-                child: CircleAvatar(
+                child: const CircleAvatar(
                   radius: 16,
                   backgroundColor: AppTheme.primary,
-                  child: const Icon(
-                    Icons.edit,
-                    size: 16,
-                    color: Colors.white,
-                  ),
+                  child: Icon(Icons.edit, size: 16, color: Colors.white),
                 ),
               ),
             ],
@@ -86,24 +79,22 @@ class _ProfileBody extends ConsumerWidget {
         Center(
           child: Text(
             profile.name,
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
+            style: theme.textTheme.titleLarge
+                ?.copyWith(fontWeight: FontWeight.bold),
           ),
         ),
         Center(
           child: Text(
             '${profile.currencyCode} · ${profile.currencySymbol}',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: Colors.grey.shade600,
-            ),
+            style: theme.textTheme.bodyMedium
+                ?.copyWith(color: Colors.grey.shade600),
           ),
         ),
 
         const SizedBox(height: 32),
 
-        // ── Account Settings card ──────────────────────────────────────────
-        _SectionLabel(label: 'Account'),
+        // ── Account ───────────────────────────────────────────────────────
+        const _SectionLabel(label: 'Account'),
         Card(
           child: Column(
             children: [
@@ -120,10 +111,9 @@ class _ProfileBody extends ConsumerWidget {
               _SettingsTile(
                 icon: Icons.currency_exchange,
                 title: 'Currency',
-                subtitle: '${profile.currencyCode}  ${profile.currencySymbol}',
-                onTap: () async {
-                  await _showCurrencySheet(context, ref, profile);
-                },
+                subtitle:
+                    '${profile.currencyCode}  ${profile.currencySymbol}',
+                onTap: () => _showCurrencySheet(context, ref, profile),
               ),
             ],
           ),
@@ -131,11 +121,12 @@ class _ProfileBody extends ConsumerWidget {
 
         const SizedBox(height: 16),
 
-        // ── Security card ──────────────────────────────────────────────────
-        _SectionLabel(label: 'Security'),
+        // ── Security ──────────────────────────────────────────────────────
+        const _SectionLabel(label: 'Security'),
         Card(
           child: Column(
             children: [
+              // App Lock toggle
               _SettingsTile(
                 icon: Icons.lock_outline,
                 title: 'App Lock (PIN)',
@@ -146,17 +137,48 @@ class _ProfileBody extends ConsumerWidget {
                 trailing: Switch.adaptive(
                   value: profile.isPinEnabled,
                   activeColor: AppTheme.primary,
-                  onChanged: (val) async {
-                    final repo = ref.read(profileRepositoryProvider);
-                    await repo.updateProfile(
-                      profile.copyWith(
-                        isPinEnabled: val,
-                        updatedAt: DateTime.now(),
-                      ),
+                  onChanged: (val) =>
+                      _handleLockToggle(context, ref, profile, val),
+                ),
+              ),
+
+              // Change PIN — only visible when enabled
+              if (profile.isPinEnabled) ...[
+                const _Divider(),
+                _SettingsTile(
+                  icon: Icons.pin_outlined,
+                  title: 'Change PIN',
+                  subtitle: 'Update your 4-digit PIN',
+                  onTap: () async {
+                    await context.push(
+                      '/profile/setup-pin',
+                      extra: profile,
                     );
                     ref.invalidate(profileProvider);
                   },
                 ),
+              ],
+
+              const _Divider(),
+
+              // Bypass key — always shown so user can set it before they forget
+              _SettingsTile(
+                icon: Icons.cake_outlined,
+                title: 'Bypass Key',
+                subtitle: profile.bypassKey != null && profile.bypassKey!.isNotEmpty
+                    ? 'Set  ·  birth month & day (MMDD)'
+                    : 'Not set  ·  tap to configure',
+                subtitleColor: profile.bypassKey != null &&
+                        profile.bypassKey!.isNotEmpty
+                    ? AppTheme.income
+                    : Colors.orange.shade600,
+                onTap: () async {
+                  await context.push(
+                    '/profile/set-bypass-key',
+                    extra: profile,
+                  );
+                  ref.invalidate(profileProvider);
+                },
               ),
             ],
           ),
@@ -164,8 +186,8 @@ class _ProfileBody extends ConsumerWidget {
 
         const SizedBox(height: 16),
 
-        // ── About card ────────────────────────────────────────────────────
-        _SectionLabel(label: 'About'),
+        // ── About ─────────────────────────────────────────────────────────
+        const _SectionLabel(label: 'About'),
         Card(
           child: Column(
             children: [
@@ -176,7 +198,7 @@ class _ProfileBody extends ConsumerWidget {
                 showChevron: false,
               ),
               const _Divider(),
-              _SettingsTile(
+              const _SettingsTile(
                 icon: Icons.shield_outlined,
                 title: 'Privacy',
                 subtitle: 'All data stays on your device — always.',
@@ -191,6 +213,61 @@ class _ProfileBody extends ConsumerWidget {
     );
   }
 
+  // ── Toggle handler ─────────────────────────────────────────────────────────
+  Future<void> _handleLockToggle(
+    BuildContext context,
+    WidgetRef ref,
+    UserProfile profile,
+    bool enable,
+  ) async {
+    final repo = ref.read(profileRepositoryProvider);
+
+    if (enable) {
+      // ── Turning ON: must set a PIN first ──
+      final result = await context.push<bool>(
+        '/profile/setup-pin',
+        extra: profile,
+      );
+      // SetupPinScreen already persists isPinEnabled=true via repo.setPin.
+      // Just refresh.
+      if (result == true) {
+        ref.invalidate(profileProvider);
+      }
+    } else {
+      // ── Turning OFF: confirm then remove ──
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Disable App Lock?'),
+          content: const Text(
+            'Your PIN will be removed. '
+            'Anyone with access to this device will be able to open the app.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text(
+                'Disable',
+                style: TextStyle(color: Colors.red),
+              ),
+            ),
+          ],
+        ),
+      );
+      if (confirmed == true && context.mounted) {
+        await repo.removePin(profile);
+        // Mark session as still unlocked so we don't get bounced to /lock.
+        ref.read(appLockStateProvider.notifier).disableLock();
+        ref.invalidate(profileProvider);
+      }
+    }
+  }
+
+  // ── Currency sheet ─────────────────────────────────────────────────────────
   Future<void> _showCurrencySheet(
     BuildContext context,
     WidgetRef ref,
@@ -208,12 +285,11 @@ class _ProfileBody extends ConsumerWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Currency bottom sheet — inline so it can call ref directly
+// Currency bottom sheet
 // ─────────────────────────────────────────────────────────────────────────────
 class _CurrencySheet extends ConsumerWidget {
   final UserProfile profile;
   final WidgetRef ref;
-
   const _CurrencySheet({required this.profile, required this.ref});
 
   @override
@@ -249,7 +325,6 @@ class _CurrencySheet extends ConsumerWidget {
                 itemBuilder: (_, i) {
                   final c = kSupportedCurrencies[i];
                   final isSelected = c['code'] == profile.currencyCode;
-
                   return ListTile(
                     leading: CircleAvatar(
                       backgroundColor: isSelected
@@ -268,7 +343,8 @@ class _CurrencySheet extends ConsumerWidget {
                     title: Text(c['name']!),
                     subtitle: Text(c['code']!),
                     trailing: isSelected
-                        ? const Icon(Icons.check_circle, color: AppTheme.primary)
+                        ? const Icon(Icons.check_circle,
+                            color: AppTheme.primary)
                         : null,
                     onTap: () async {
                       Navigator.pop(ctx);
@@ -292,7 +368,7 @@ class _CurrencySheet extends ConsumerWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Small reusable widgets
+// Shared small widgets
 // ─────────────────────────────────────────────────────────────────────────────
 class _SectionLabel extends StatelessWidget {
   final String label;

@@ -8,7 +8,7 @@ import '../features/budgets/presentation/budgets_screen.dart';
 import '../features/categories/presentation/categories_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
 import '../features/profile/presentation/edit_profile_screen.dart';
-import '../models/user_profile.dart';
+import '../features/profile/providers/profile_providers.dart';
 import '../features/transactions/presentation/add_transaction_screen.dart';
 import '../features/groups/presentation/groups_screen.dart';
 import '../features/groups/presentation/create_group_screen.dart';
@@ -16,19 +16,56 @@ import '../features/groups/presentation/group_detail_screen.dart';
 import '../features/groups/presentation/add_shared_expense_screen.dart';
 import '../features/groups/presentation/settle_up_screen.dart';
 import '../features/budgets/presentation/create_budget_screen.dart';
+import '../features/security/presentation/pin_lock_screen.dart';
+import '../features/security/presentation/setup_pin_screen.dart';
+import '../features/security/presentation/set_bypass_key_screen.dart';
 import '../models/group.dart';
 import '../models/budget.dart';
 import '../models/transaction.dart';
+import '../models/user_profile.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 final _shellNavigatorKey = GlobalKey<NavigatorState>();
 
 final appRouterProvider = Provider<GoRouter>((ref) {
+  // Rebuild the router whenever lock state or profile changes.
+  final isUnlocked = ref.watch(appLockStateProvider);
+  final profileAsync = ref.watch(profileProvider);
+
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
     initialLocation: '/dashboard',
     debugLogDiagnostics: true,
+
+    // ── Global redirect guard ──────────────────────────────────────────────
+    redirect: (context, state) {
+      final goingToLock = state.matchedLocation == '/lock';
+
+      // While profile is still loading, let the app show normally.
+      final profile = profileAsync.valueOrNull;
+      if (profile == null) return null;
+
+      final lockEnabled = profile.isPinEnabled;
+
+      // If lock is enabled and session is not yet unlocked, send to /lock.
+      if (lockEnabled && !isUnlocked && !goingToLock) return '/lock';
+
+      // If lock is disabled (or already unlocked) and user somehow hits /lock,
+      // bounce them to dashboard.
+      if (goingToLock && (!lockEnabled || isUnlocked)) return '/dashboard';
+
+      return null;
+    },
+
     routes: [
+      // ── Lock screen (full-screen, no shell) ──────────────────────────────
+      GoRoute(
+        path: '/lock',
+        name: 'lock',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const PinLockScreen(),
+      ),
+
       // ==================== MAIN SHELL (Bottom Navigation) ====================
       ShellRoute(
         navigatorKey: _shellNavigatorKey,
@@ -81,7 +118,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'add-transaction',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) {
-          final type = state.uri.queryParameters['type']; // income | expense
+          final type = state.uri.queryParameters['type'];
           return AddTransactionScreen(initialType: type);
         },
       ),
@@ -160,6 +197,24 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return EditProfileScreen(profile: profile);
         },
       ),
+      GoRoute(
+        path: '/profile/setup-pin',
+        name: 'setup-pin',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) {
+          final profile = state.extra as UserProfile;
+          return SetupPinScreen(profile: profile);
+        },
+      ),
+      GoRoute(
+        path: '/profile/set-bypass-key',
+        name: 'set-bypass-key',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) {
+          final profile = state.extra as UserProfile;
+          return SetBypassKeyScreen(profile: profile);
+        },
+      ),
     ],
   );
 });
@@ -167,7 +222,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 // ==================== MAIN SHELL WITH BOTTOM NAV ====================
 class MainShell extends StatelessWidget {
   final Widget child;
-
   const MainShell({super.key, required this.child});
 
   @override
@@ -181,7 +235,6 @@ class AppBottomNav extends ConsumerWidget {
 
   int _calculateSelectedIndex(BuildContext context) {
     final location = GoRouterState.of(context).uri.toString();
-
     if (location.startsWith('/dashboard')) return 0;
     if (location.startsWith('/transactions')) return 1;
     if (location.startsWith('/budgets')) return 2;
@@ -192,28 +245,17 @@ class AppBottomNav extends ConsumerWidget {
 
   void _onItemTapped(BuildContext context, int index) {
     switch (index) {
-      case 0:
-        context.goNamed('dashboard');
-        break;
-      case 1:
-        context.goNamed('transactions');
-        break;
-      case 2:
-        context.goNamed('budgets');
-        break;
-      case 3:
-        context.goNamed('groups');
-        break;
-      case 4:
-        context.goNamed('profile');
-        break;
+      case 0: context.goNamed('dashboard'); break;
+      case 1: context.goNamed('transactions'); break;
+      case 2: context.goNamed('budgets'); break;
+      case 3: context.goNamed('groups'); break;
+      case 4: context.goNamed('profile'); break;
     }
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final selectedIndex = _calculateSelectedIndex(context);
-
     return NavigationBar(
       selectedIndex: selectedIndex,
       onDestinationSelected: (index) => _onItemTapped(context, index),
